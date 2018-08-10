@@ -56,7 +56,13 @@ private:
 
 private:
 	// •Ï”éŒ¾
+	EFFECT shadowMapEffect_;
 
+	CAMERA camera_;
+
+	RENDERTARGET shadowRenderTarget_;
+
+	MODEL teaPot_;
 
 	// ŠÖ”éŒ¾
 

@@ -1,0 +1,141 @@
+//-------------------------------------------------------------------------------------------------
+// File : ShadowMap.cgfx
+//
+// Shadow Mapping
+// Date : May 30, 2008
+// Version : 1.0
+// Author : Pocol
+//--------------------------------------------------------------------------------------------------
+
+//
+// Global Variables
+//
+float4x4 mWVP;
+float4x4 mWLP;
+float4x4 mWLPB;
+float3 vLightPosition;
+
+sampler ShadowMapSmp;
+
+//
+// VertexInput
+//
+struct VertexInput
+{
+	float4 Position : POSITION;
+	float3 Normal : NORMAL;
+	float4 Color : COLOR;
+};
+
+//
+// VertexOutput
+//
+struct VertexOutput
+{
+	float4 Position : POSITION;
+	float4 Diffuse : COLOR0;
+	float4 Ambient : COLOR1;
+	float4 ShadowTexCoord : TEXCOORD0;
+	float4 Depth : TEXCOORD1;
+};
+
+//--------------------------------------------------------------------------------------------------
+// Name : CreateShadowVS()
+// Desc : シャドウマップの作成（頂点シェーダ）
+//--------------------------------------------------------------------------------------------------
+VertexOutput CreateShadowVS( VertexInput input )
+{
+	VertexOutput output;
+
+	//　座標変換
+	float4 Position = mul( input.Position, mWLP );
+
+	//　位置
+	output.Position = Position;
+
+	//　シャドウ作成用
+	output.ShadowTexCoord = Position;
+
+	return output;
+}
+
+//-------------------------------------------------------------------------------------------------
+// Name : VertexShaderFunction()
+// Desc : 影を付けて描画（頂点シェーダ）
+//-------------------------------------------------------------------------------------------------
+VertexOutput VertexShaderFunction( VertexInput  input )
+{
+	VertexOutput output;
+
+	//　座標変換
+	output.Position = mul( input.Position, mWVP );
+
+	//　ライトベクトル
+	float3 L = normalize( vLightPosition - input.Position.xyz );
+	
+	//　法線ベクトル
+	float3 N = normalize( input.Normal );
+
+	//　色
+	output.Diffuse = input.Color * max( dot( L, N ), 0 );
+	output.Ambient = input.Color * 0.3f;
+
+	//　シャドウマップ
+	output.ShadowTexCoord = mul( input.Position, mWLPB );
+
+	//　深度
+	output.Depth = mul( input.Position, mWLP );
+
+	return output;
+}
+
+//-------------------------------------------------------------------------------------------------
+// Name : CreateShadowPS()
+// Desc : シャドウマップの作成（ピクセルシェーダ）
+//-------------------------------------------------------------------------------------------------
+float4 CreateShadowPS( VertexOutput input ) : COLOR
+{
+	float4 output;
+
+	//　深度値算出
+	output = input.ShadowTexCoord.z / input.ShadowTexCoord.w;
+
+	return output;
+}
+
+//-------------------------------------------------------------------------------------------------
+// Name : PixelShaderFuction()
+// Desc : 影を付けて描画（ピクセルシェーダ）
+//-------------------------------------------------------------------------------------------------
+float4 PixelShaderFunction( VertexOutput input ) : COLOR
+{
+	float4 output;
+
+	//　深度値を取り出す
+	float shadow = tex2Dproj( ShadowMapSmp, input.ShadowTexCoord ).x;
+	
+	//　深度値を比較して色を決定
+	output = input.Ambient + ( ( shadow * input.Depth.w < input.Depth.z - 0.05f ) ? 0 : input.Diffuse );
+	
+	return output;
+}
+
+//
+// technique
+//
+technique Render
+{
+	//　シャドウマップを作成
+	pass Pass0
+	{
+		VertexProgram = compile vp40 CreateShadowVS();
+		FragmentProgram = compile fp40 CreateShadowPS();
+	}
+
+	//　影をつけて描画
+	pass Pass1
+	{
+		VertexProgram = compile vp40 VertexShaderFunction();
+		FragmentProgram = compile fp40 PixelShaderFunction();
+	}
+}
